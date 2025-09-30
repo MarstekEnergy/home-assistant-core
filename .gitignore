@@ -1,5 +1,23 @@
 config2/*
 
+# Home Assistant 运行期状态（必须忽略）
+config/.storage/
+config/home-assistant_v2.db*
+config/home-assistant.log*
+config/deps/
+
+# 私密文件（必须忽略）
+config/secrets.yaml
+
+# 可选：按需忽略
+config/tts/
+config/www/**/community/**        
+config/www/**/*.map               
+config/*.corrupt.*
+config/.cloud/
+config/.ipynb_checkpoints/
+
+
 tests/testing_config/deps
 tests/testing_config/home-assistant.log*
 
