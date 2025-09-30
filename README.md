@@ -70,20 +70,55 @@ config/custom_components/marstek/
 
 ## 安装步骤
 
-### 1. 复制文件
+### 方法一：生产环境安装
+
+#### 1. 复制文件
 将整个 `marstek` 目录复制到 Home Assistant 的 `custom_components` 目录：
 ```bash
 cp -r marstek /config/custom_components/
 ```
 
-### 2. 重启 Home Assistant
+#### 2. 重启 Home Assistant
 重启 HA 以加载新集成。
 
-### 3. 添加设备
+#### 3. 添加设备
 1. 进入 **设置** → **设备与服务** → **集成**
 2. 点击 **添加集成**，搜索 `Marstek`
 3. 系统会自动发现局域网内的设备
 4. 选择要添加的设备，完成配置
+
+### 方法二：开发环境搭建
+
+#### 1. 搭建开发环境
+```bash
+# 创建虚拟环境
+python3.13 -m venv venv
+
+# 激活虚拟环境
+source venv/bin/activate
+
+# 安装依赖
+script/setup
+```
+
+#### 2. 运行 Home Assistant（开发模式）
+```bash
+# 停止现有 HA 进程（如果有）
+pkill -f "hass -c config"
+
+# 启动开发模式
+hass -c config
+```
+
+#### 3. 添加集成
+1. 在开发环境中，进入 **设置** → **设备与服务** → **集成**
+2. 点击 **添加集成**，搜索 `Marstek`
+3. 系统会自动发现局域网内的设备
+4. 选择要添加的设备，完成配置
+
+#### 4. 开发调试
+- 修改代码后，在 HA 前端 **开发者工具** → **重新加载** → 选择对应平台重新加载
+- 查看日志：`tail -f home-assistant.log`
 
 ## 自动化配置
 
