@@ -159,3 +159,4 @@ pytest_buckets.txt
 # AI tooling
 .claude/settings.local.json
 
+config/automations.yaml
