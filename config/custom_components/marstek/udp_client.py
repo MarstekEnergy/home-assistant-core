@@ -33,7 +33,7 @@ class MarstekUDPClient:
         self._cache_timestamp: float = 0
         self._cache_duration: float = 30.0  # 30秒缓存
         # 固定本地发送IP（用于日志与对端回包识别）
-        self._local_send_ip: str = "192.168.3.235"
+        self._local_send_ip: str = "0.0.0.0"
 
     async def async_setup(self) -> None:
         """设置UDP socket."""
