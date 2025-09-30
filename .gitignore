@@ -8,6 +8,7 @@ config/deps/
 
 # 私密文件（必须忽略）
 config/secrets.yaml
+config/automations.yaml
 
 # 可选：按需忽略
 config/tts/
