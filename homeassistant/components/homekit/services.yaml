@@ -1,0 +1,15 @@
+# Describes the format for available HomeKit services
+
+reload:
+reset_accessory:
+  target:
+    entity: {}
+
+unpair:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          multiple: true
+          integration: homekit

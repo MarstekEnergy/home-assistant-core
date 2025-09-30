@@ -1,0 +1,88 @@
+# 基础 Marstek 设备卡片配置（不需要 card_mod 插件）
+
+# 设备1 - 基础卡片
+- type: vertical-stack
+  title: "🔋 Marstek 设备 1 (192.168.3.91)"
+  cards:
+    - type: gauge
+      entity: sensor.marstek_battery_level_192_168_3_91
+      name: "电池电量"
+      unit: "%"
+      min: 0
+      max: 100
+      severity:
+        green: 50
+        yellow: 20
+        red: 0
+      needle: true
+    - type: gauge
+      entity: sensor.marstek_battery_power_192_168_3_91
+      name: "电网功率"
+      unit: "W"
+      min: 0
+      max: 2000
+      needle: true
+    - type: entities
+      title: "📱 设备信息"
+      entities:
+        - sensor.marstek_device_mode_192_168_3_91
+        - sensor.marstek_battery_status_192_168_3_91
+        - sensor.marstek_device_ip_192_168_3_91
+        - sensor.marstek_device_version_192_168_3_91
+
+# 设备2 - 基础卡片
+- type: vertical-stack
+  title: "🔋 Marstek 设备 2 (192.168.3.76)"
+  cards:
+    - type: gauge
+      entity: sensor.marstek_battery_level_192_168_3_76
+      name: "电池电量"
+      unit: "%"
+      min: 0
+      max: 100
+      severity:
+        green: 50
+        yellow: 20
+        red: 0
+      needle: true
+    - type: gauge
+      entity: sensor.marstek_battery_power_192_168_3_76
+      name: "电网功率"
+      unit: "W"
+      min: 0
+      max: 2000
+      needle: true
+    - type: entities
+      title: "📱 设备信息"
+      entities:
+        - sensor.marstek_device_mode_192_168_3_76
+        - sensor.marstek_battery_status_192_168_3_76
+        - sensor.marstek_device_ip_192_168_3_76
+        - sensor.marstek_device_version_192_168_3_76
+
+# 简化概览卡片
+- type: horizontal-stack
+  title: "⚡ Marstek 设备概览"
+  cards:
+    - type: gauge
+      entity: sensor.marstek_battery_level_192_168_3_91
+      name: "设备1电量"
+      unit: "%"
+      min: 0
+      max: 100
+      severity:
+        green: 50
+        yellow: 20
+        red: 0
+      needle: true
+    - type: gauge
+      entity: sensor.marstek_battery_level_192_168_3_76
+      name: "设备2电量"
+      unit: "%"
+      min: 0
+      max: 100
+      severity:
+        green: 50
+        yellow: 20
+        red: 0
+      needle: true

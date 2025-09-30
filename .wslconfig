@@ -1,0 +1,11 @@
+[wsl2]
+# 启用网络桥接模式
+networkingMode=mirrored
+# 启用DNS隧道
+dnsTunneling=true
+# 启用防火墙
+firewall=true
+# 启用自动代理
+autoProxy=true
+
+

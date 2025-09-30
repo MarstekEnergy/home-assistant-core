@@ -1,0 +1,128 @@
+# 美观的 Marstek 设备卡片配置
+# 需要安装 card_mod 插件：https://github.com/thomasloven/lovelace-card-mod
+
+# 设备1 - 完整信息卡片
+- type: custom:card-mod
+  card:
+    type: vertical-stack
+    title: "🔋 Marstek 设备 1 (192.168.3.91)"
+    cards:
+      - type: gauge
+        entity: sensor.marstek_battery_level_192_168_3_91
+        name: "电池电量"
+        unit: "%"
+        min: 0
+        max: 100
+        severity:
+          green: 50
+          yellow: 20
+          red: 0
+        needle: true
+      - type: gauge
+        entity: sensor.marstek_battery_power_192_168_3_91
+        name: "电池功率"
+        unit: "W"
+        min: -100
+        max: 100
+        needle: true
+      - type: entities
+        title: "📱 设备信息"
+        entities:
+          - sensor.marstek_device_mode_192_168_3_91
+          - sensor.marstek_battery_status_192_168_3_91
+          - sensor.marstek_device_ip_192_168_3_91
+          - sensor.marstek_device_version_192_168_3_91
+  style: |
+    ha-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 15px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    }
+    .card-header {
+      color: white;
+      font-weight: bold;
+      font-size: 1.2em;
+    }
+
+# 设备2 - 完整信息卡片
+- type: custom:card-mod
+  card:
+    type: vertical-stack
+    title: "🔋 Marstek 设备 2 (192.168.3.76)"
+    cards:
+      - type: gauge
+        entity: sensor.marstek_battery_level_192_168_3_76
+        name: "电池电量"
+        unit: "%"
+        min: 0
+        max: 100
+        severity:
+          green: 50
+          yellow: 20
+          red: 0
+        needle: true
+      - type: gauge
+        entity: sensor.marstek_battery_power_192_168_3_76
+        name: "电池功率"
+        unit: "W"
+        min: -100
+        max: 100
+        needle: true
+      - type: entities
+        title: "📱 设备信息"
+        entities:
+          - sensor.marstek_device_mode_192_168_3_76
+          - sensor.marstek_battery_status_192_168_3_76
+          - sensor.marstek_device_ip_192_168_3_76
+          - sensor.marstek_device_version_192_168_3_76
+  style: |
+    ha-card {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      border-radius: 15px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    }
+    .card-header {
+      color: white;
+      font-weight: bold;
+      font-size: 1.2em;
+    }
+
+# 简化概览卡片 - 只显示电池电量
+- type: custom:card-mod
+  card:
+    type: horizontal-stack
+    title: "⚡ Marstek 设备概览"
+    cards:
+      - type: gauge
+        entity: sensor.marstek_battery_level_192_168_3_91
+        name: "设备1"
+        unit: "%"
+        min: 0
+        max: 100
+        severity:
+          green: 50
+          yellow: 20
+          red: 0
+        needle: true
+      - type: gauge
+        entity: sensor.marstek_battery_level_192_168_3_76
+        name: "设备2"
+        unit: "%"
+        min: 0
+        max: 100
+        severity:
+          green: 50
+          yellow: 20
+          red: 0
+        needle: true
+  style: |
+    ha-card {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      border-radius: 15px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    }
+    .card-header {
+      color: white;
+      font-weight: bold;
+      font-size: 1.2em;
+    }

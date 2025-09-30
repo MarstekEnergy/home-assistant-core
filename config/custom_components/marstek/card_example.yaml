@@ -1,0 +1,131 @@
+# Marstek设备信息卡片示例
+# 将此配置添加到你的Lovelace仪表板中
+
+type: vertical-stack
+cards:
+  # 设备概览卡片 - 显示四个核心属性
+  - type: entities
+    title: "🔋 Marstek设备状态"
+    entities:
+      - sensor.marstek_battery_level
+      - sensor.marstek_battery_power
+      - sensor.marstek_device_ip
+      - sensor.marstek_device_version
+    card_mod:
+      style: |
+        ha-card {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border-radius: 15px;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+        .card-header {
+          color: white;
+          font-weight: bold;
+          font-size: 1.2em;
+        }
+        .entity-row {
+          background: rgba(255,255,255,0.1);
+          margin: 5px 0;
+          border-radius: 8px;
+          padding: 8px;
+        }
+        .entity-row .info {
+          color: rgba(255,255,255,0.9);
+        }
+
+  # 电池状态可视化卡片
+  - type: horizontal-stack
+    cards:
+      - type: gauge
+        entity: sensor.marstek_battery_level
+        name: "电池电量"
+        unit: "%"
+        min: 0
+        max: 100
+        severity:
+          green: 50
+          yellow: 20
+          red: 0
+        card_mod:
+          style: |
+            ha-card {
+              background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+              border-radius: 15px;
+              box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            }
+            .card-header {
+              color: white;
+              font-weight: bold;
+              text-align: center;
+            }
+      
+      - type: gauge
+        entity: sensor.marstek_battery_power
+        name: "电池功率"
+        unit: "W"
+        min: -2000
+        max: 2000
+        card_mod:
+          style: |
+            ha-card {
+              background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+              border-radius: 15px;
+              box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            }
+            .card-header {
+              color: white;
+              font-weight: bold;
+              text-align: center;
+            }
+
+  # 设备信息卡片
+  - type: horizontal-stack
+    cards:
+      - type: entities
+        title: "📱 设备IP"
+        entities:
+          - sensor.marstek_device_ip
+        card_mod:
+          style: |
+            ha-card {
+              background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+              color: white;
+              border-radius: 15px;
+              box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            }
+            .card-header {
+              color: white;
+              font-weight: bold;
+              text-align: center;
+            }
+            .entity-row {
+              background: rgba(255,255,255,0.1);
+              margin: 5px 0;
+              border-radius: 8px;
+              padding: 8px;
+            }
+      
+      - type: entities
+        title: "🔢 版本号"
+        entities:
+          - sensor.marstek_device_version
+        card_mod:
+          style: |
+            ha-card {
+              background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+              color: white;
+              border-radius: 15px;
+              box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            }
+            .card-header {
+              color: white;
+              font-weight: bold;
+              text-align: center;
+            }
+            .entity-row {
+              background: rgba(255,255,255,0.1);
+              margin: 5px 0;
+              border-radius: 8px;
+              padding: 8px;
+            }
