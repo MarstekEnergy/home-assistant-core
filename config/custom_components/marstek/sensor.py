@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from datetime import timedelta
+import logging
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
@@ -12,20 +12,23 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+)
 
-from .const import DOMAIN
+from .command_builder import get_es_mode
+from .const import DEFAULT_UDP_PORT, DOMAIN
 from .udp_client import MarstekUDPClient
-from .command_builder import get_battery_status, get_es_status, get_es_mode
 
 _LOGGER = logging.getLogger(__name__)
 
-# 更新间隔
+# Update interval for polling device data
 SCAN_INTERVAL = timedelta(seconds=10)
 
 
 class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
-    """每个设备的独立数据更新协调器."""
+    """Per-device data update coordinator."""
 
     def __init__(self, hass: HomeAssistant, udp_client: MarstekUDPClient, device_ip: str) -> None:
         """Initialize the coordinator."""
@@ -37,14 +40,14 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
             name=f"Marstek {device_ip}",
             update_interval=SCAN_INTERVAL,
         )
-        _LOGGER.debug("设备 %s 轮询协调器已启动，轮询间隔: %s秒", device_ip, SCAN_INTERVAL.total_seconds())
+        _LOGGER.debug("Device %s polling coordinator started, interval: %ss", device_ip, SCAN_INTERVAL.total_seconds())
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """使用单个 ES.GetStatus 请求获取所有数据."""
-        _LOGGER.debug("开始轮询设备: %s", self.device_ip)
-        _LOGGER.debug("UDP客户端: %s", self.udp_client)
-        
-        # 获取当前数据作为默认值（保留旧数据）
+        """Fetch all data using a single ES.GetMode request."""
+        _LOGGER.debug("Start polling device: %s", self.device_ip)
+        _LOGGER.debug("UDP client: %s", self.udp_client)
+
+        # Use existing data as defaults (preserve previous values)
         current_data = self.data or {}
         result_data = {
             "battery_soc": current_data.get("battery_soc", 0),
@@ -54,34 +57,34 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
             "device_ip": self.device_ip,
             "last_update": asyncio.get_event_loop().time(),
         }
-        
-        # 延迟函数
+
+        # Delay helper
         def delay(ms):
             return asyncio.sleep(ms / 1000.0)
-        
-        # 单次 ES.GetMode（含 bat_soc 与 ongrid_power），避免一轮发送两次导致设备限流
+
+        # Single ES.GetMode request (includes bat_soc and ongrid_power)
         async def es_status_request():
             try:
-                _LOGGER.debug("开始 ES.GetMode 查询到设备: %s", self.device_ip)
+                _LOGGER.debug("Begin ES.GetMode query to device: %s", self.device_ip)
                 mode_as_status_command = get_es_mode(0)
-                _LOGGER.info("Sensor发送请求到 %s | %s", self.device_ip, mode_as_status_command)
-                # 最多等待 2.5 秒
+                _LOGGER.debug("Sensor send -> %s | %s", self.device_ip, mode_as_status_command)
+                # Wait up to 2.5s
                 mode_as_status_result = await self.udp_client.send_request(
-                    mode_as_status_command, self.device_ip, self.udp_client._port, timeout=2.5
+                    mode_as_status_command, self.device_ip, DEFAULT_UDP_PORT, timeout=2.5
                 )
-                _LOGGER.info("Sensor收到响应自 %s | %s", self.device_ip, mode_as_status_result)
+                _LOGGER.debug("Sensor recv <- %s | %s", self.device_ip, mode_as_status_result)
 
                 status_data = mode_as_status_result.get("result", {})
-                _LOGGER.debug("ES.GetMode 原始响应: %s", mode_as_status_result)
-                _LOGGER.debug("ES.GetMode 响应数据: %s", status_data)
+                _LOGGER.debug("ES.GetMode raw: %s", mode_as_status_result)
+                _LOGGER.debug("ES.GetMode data: %s", status_data)
 
-                # SOC 与 功率
+                # SOC and power
                 battery_soc = status_data.get("bat_soc", result_data.get("battery_soc", 0))
                 result_data["battery_soc"] = battery_soc
                 ongrid_power = status_data.get("ongrid_power", result_data.get("battery_power", 0))
                 result_data["battery_power"] = abs(ongrid_power)
 
-                # 运行模式与电池状态
+                # Operating mode and battery status
                 device_mode = status_data.get("mode", "Unknown")
                 result_data["device_mode"] = device_mode
                 if ongrid_power > 0:
@@ -92,8 +95,8 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
                     battery_status = "Idle"
                 result_data["battery_status"] = battery_status
 
-                _LOGGER.info(
-                    "设备 %s 成功: SOC=%s%%, ongrid_power=%sW(取绝对=%sW), mode=%s, status=%s",
+                _LOGGER.debug(
+                    "Device %s OK: SOC=%s%%, ongrid_power=%sW(abs=%sW), mode=%s, status=%s",
                     self.device_ip,
                     battery_soc,
                     ongrid_power,
@@ -101,27 +104,32 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
                     device_mode,
                     battery_status,
                 )
-                return True
-            except Exception as err:
-                _LOGGER.debug("ES.GetMode 查询失败(2.5s超时或异常): %s %s", self.device_ip, str(err))
+            except (TimeoutError, OSError, ValueError) as err:
+                _LOGGER.debug("ES.GetMode failed (timeout/exception): %s %s", self.device_ip, str(err))
                 return False
-        
-        # 已并入 es_status_request，不再单独发送第二次
+            else:
+                return True
+
+        # Already covered by es_status_request, keep for structure compatibility
         async def es_mode_request():
             return True
-        
-        # 串行执行请求，避免UDP客户端冲突
+
+        # Execute sequentially to avoid UDP client conflicts
         try:
-            # 仅发送一次 ES.GetMode，避免频繁请求导致设备拒绝或丢包
+            # Only send once to avoid throttling or packet loss
             await es_status_request()
-            
-        except Exception as err:
-            _LOGGER.error("设备 %s 轮询异常: %s", self.device_ip, err)
-        
-        _LOGGER.info("设备 %s 轮询完成: 电量 %s%%, 功率 %sW, 模式 %s, 状态 %s", 
-                    self.device_ip, result_data["battery_soc"], result_data["battery_power"],
-                    result_data["device_mode"], result_data["battery_status"])
-        
+        except (TimeoutError, OSError, ValueError) as err:
+            _LOGGER.error("Device %s polling error: %s", self.device_ip, err)
+
+        _LOGGER.debug(
+            "Device %s poll done: SOC %s%%, Power %sW, Mode %s, Status %s",
+            self.device_ip,
+            result_data["battery_soc"],
+            result_data["battery_power"],
+            result_data["device_mode"],
+            result_data["battery_status"],
+        )
+
         return result_data
 
 
@@ -139,7 +147,7 @@ class MarstekSensor(CoordinatorEntity, SensorEntity):
         self._device_info = device_info
         self._sensor_type = sensor_type
         self._attr_device_info = {
-            # 用IP作为设备标识，避免MAC重复导致设备被合并
+            # Use IP as identifier to avoid merge on duplicate MACs
             "identifiers": {(DOMAIN, device_info["ip"])},
             "name": f"Marstek {device_info['device_type']} v{device_info['version']}",
             "manufacturer": "Marstek",
@@ -151,12 +159,16 @@ class MarstekSensor(CoordinatorEntity, SensorEntity):
     @property
     def unique_id(self) -> str:
         """Return a unique ID."""
-        # 使用IP地址作为唯一标识符，避免MAC地址重复问题
+        # Use IP as unique identifier to avoid duplicate MAC collisions
         device_id = self._device_info.get('ip') or self._device_info.get('mac', 'unknown')
         unique_id = f"{device_id}_{self._sensor_type}"
-        _LOGGER.debug("生成传感器唯一ID: %s (设备IP: %s, MAC: %s, 传感器类型: %s)", 
-                     unique_id, self._device_info.get('ip'), 
-                     self._device_info.get('mac'), self._sensor_type)
+        _LOGGER.debug(
+            "Generate sensor unique_id: %s (ip=%s, mac=%s, type=%s)",
+            unique_id,
+            self._device_info.get('ip'),
+            self._device_info.get('mac'),
+            self._sensor_type,
+        )
         return unique_id
 
     @property
@@ -243,7 +255,7 @@ class MarstekDeviceInfoSensor(MarstekSensor):
         super().__init__(coordinator, device_info, info_type)
         self._info_type = info_type
         self._attr_icon = "mdi:information"
-        # 强制设置为文本型传感器，不显示图形化卡片
+        # Force as text sensor to avoid graph cards
         self._attr_device_class = None
         self._attr_state_class = None
 
@@ -257,9 +269,9 @@ class MarstekDeviceInfoSensor(MarstekSensor):
         """Return the device info."""
         if self._info_type == "device_ip":
             return self._device_info.get("ip", "")
-        elif self._info_type == "device_version":
+        if self._info_type == "device_version":
             return str(self._device_info.get("version", ""))
-        elif self._info_type == "wifi_name":
+        if self._info_type == "wifi_name":
             return self._device_info.get("wifi_name", "")
         return None
 
@@ -275,7 +287,7 @@ class MarstekDeviceModeSensor(MarstekSensor):
         """Initialize the device mode sensor."""
         super().__init__(coordinator, device_info, "device_mode")
         self._attr_icon = "mdi:cog"
-        # 强制设置为文本型传感器，不显示图形化卡片
+        # Force as text sensor to avoid graph cards
         self._attr_device_class = None
         self._attr_state_class = None
 
@@ -304,7 +316,7 @@ class MarstekBatteryStatusSensor(MarstekSensor):
         """Initialize the battery status sensor."""
         super().__init__(coordinator, device_info, "battery_status")
         self._attr_icon = "mdi:battery"
-        # 强制设置为文本型传感器，不显示图形化卡片
+        # Force as text sensor to avoid graph cards
         self._attr_device_class = None
         self._attr_state_class = None
 
@@ -329,16 +341,16 @@ async def async_setup_entry(
 ) -> None:
     """Set up Marstek sensors based on a config entry."""
     device_ip = config_entry.data["host"]
-    _LOGGER.info("正在设置Marstek设备传感器: %s", device_ip)
-    
-    # 使用全局共享的UDP客户端（固定绑定到 192.168.3.235:30000），避免多实例占用端口导致设备不回包
+    _LOGGER.info("Setting up Marstek sensors: %s", device_ip)
+
+    # Use a shared global UDP client to avoid port conflicts across instances
     store = hass.data.setdefault(DOMAIN, {})
     if "udp_client" not in store:
         store["udp_client"] = MarstekUDPClient(hass)
         await store["udp_client"].async_setup()
     udp_client = store["udp_client"]
 
-    # 从配置中获取设备信息
+    # Build device info from config entry
     device_info = {
         "ip": config_entry.data["host"],
         "mac": config_entry.data["mac"],
@@ -349,10 +361,10 @@ async def async_setup_entry(
         "ble_mac": config_entry.data.get("ble_mac", ""),
     }
 
-    # 创建该设备的独立数据更新协调器
+    # Create coordinator for this device
     coordinator = MarstekDataUpdateCoordinator(hass, udp_client, device_info["ip"])
 
-    # 创建传感器实体 - 包含电池电量、功率、运行模式、充放电状态、设备IP和版本号
+    # Create sensor entities - battery SoC, grid power, device mode, battery status, device IP, version
     sensors = [
         MarstekBatterySensor(coordinator, device_info),  # 电池电量
         MarstekPowerSensor(coordinator, device_info),  # 电网功率
@@ -362,5 +374,5 @@ async def async_setup_entry(
         MarstekDeviceInfoSensor(coordinator, device_info, "device_version"),  # 版本号
     ]
 
-    _LOGGER.info("设备 %s 传感器设置完成，共创建 %d 个传感器", device_ip, len(sensors))
+    _LOGGER.info("Device %s sensors set up, total %d", device_ip, len(sensors))
     async_add_entities(sensors)
