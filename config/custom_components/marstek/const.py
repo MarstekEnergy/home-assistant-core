@@ -8,7 +8,7 @@ DOMAIN: Final = "marstek"
 
 # UDP Configuration
 DEFAULT_UDP_PORT: Final = 30000
-DISCOVERY_TIMEOUT: Final = 10.0  # 每次广播等待10秒
+DISCOVERY_TIMEOUT: Final = 10.0  # Wait 10s for each broadcast
 
 # Device Commands
 CMD_DISCOVER: Final = "Marstek.GetDevice"

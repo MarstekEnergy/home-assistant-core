@@ -366,12 +366,12 @@ async def async_setup_entry(
 
     # Create sensor entities - battery SoC, grid power, device mode, battery status, device IP, version
     sensors = [
-        MarstekBatterySensor(coordinator, device_info),  # 电池电量
-        MarstekPowerSensor(coordinator, device_info),  # 电网功率
-        MarstekDeviceModeSensor(coordinator, device_info),  # 设备运行模式
-        MarstekBatteryStatusSensor(coordinator, device_info),  # 电池充放电状态
-        MarstekDeviceInfoSensor(coordinator, device_info, "device_ip"),  # 设备IP
-        MarstekDeviceInfoSensor(coordinator, device_info, "device_version"),  # 版本号
+        MarstekBatterySensor(coordinator, device_info),  # Battery SoC
+        MarstekPowerSensor(coordinator, device_info),  # Grid power
+        MarstekDeviceModeSensor(coordinator, device_info),  # Device operating mode
+        MarstekBatteryStatusSensor(coordinator, device_info),  # Battery charge/discharge status
+        MarstekDeviceInfoSensor(coordinator, device_info, "device_ip"),  # Device IP
+        MarstekDeviceInfoSensor(coordinator, device_info, "device_version"),  # Version number
     ]
 
     _LOGGER.info("Device %s sensors set up, total %d", device_ip, len(sensors))

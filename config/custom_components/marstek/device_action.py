@@ -1,7 +1,7 @@
 """Device actions for Marstek.
 
-让用户在“设备动作”里直接选择：充电/放电/停止。
-功率写死：充电 -1300W，放电 1300W；停止 enable=0。
+Expose actions in UI: charge/discharge/stop.
+Fixed power: charge -1300W, discharge 1300W; stop sets enable=0.
 """
 
 from __future__ import annotations
@@ -28,13 +28,13 @@ ACTION_DISCHARGE = "discharge"
 ACTION_STOP = "stop"
 
 
-# 设备动作配置校验模式
+# Device action configuration validation schema
 ACTION_SCHEMA = cv.DEVICE_ACTION_BASE_SCHEMA.extend(
     {
         vol.Required(CONF_DOMAIN): vol.In((DOMAIN,)),
         vol.Required(CONF_DEVICE_ID): cv.string,
         vol.Required(CONF_TYPE): vol.In((ACTION_CHARGE, ACTION_DISCHARGE, ACTION_STOP)),
-        # 前端有时会携带 entity_id（即使设备动作不需要），放宽为可选以通过校验
+        # Frontend sometimes carries entity_id (even though device actions don't need it), make optional for validation
         vol.Optional("entity_id"): cv.entity_id,
     }
 )
@@ -75,12 +75,12 @@ async def _get_host_from_device(hass: HomeAssistant, device_id: str) -> str | No
     if not device:
         return None
 
-    # 首选 identifiers 中的 IP
+    # Prefer IP from identifiers
     for domain, identifier in device.identifiers:
         if domain == DOMAIN:
             return identifier
 
-    # 兜底：找关联的配置项
+    # Fallback: find associated config entry
     for entry_id in device.config_entries:
         entry = hass.config_entries.async_get_entry(entry_id)
         if entry and entry.domain == DOMAIN:
@@ -168,8 +168,8 @@ async def async_get_action_capabilities(
 ) -> dict[str, Any]:
     """List action capabilities.
 
-    注意：这里必须返回一个 voluptuous 的 Schema，而不是列表。
-    返回空 Schema 表示无额外字段，避免前端转换报错。
+    Note: Must return a voluptuous Schema, not a list.
+    Return empty Schema to indicate no extra fields, avoid frontend conversion errors.
     """
     return {"extra_fields": vol.Schema({})}
 

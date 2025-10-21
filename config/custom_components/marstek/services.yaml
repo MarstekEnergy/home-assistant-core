@@ -1,17 +1,17 @@
 charge:
-  name: 充电
-  description: 以手动模式全天充电，负功率代表充电。
+  name: Charge
+  description: Charge in manual mode all day, negative power represents charging.
   fields:
     host:
-      name: 设备IP
-      description: 目标设备的 IP 地址，例如 192.168.3.91
+      name: Device IP
+      description: Target device IP address, e.g. 192.168.3.91
       example: 192.168.3.91
       required: true
       selector:
         text:
     power:
-      name: 功率(W)
-      description: 充电功率（负数为充电），默认 -1300。
+      name: Power (W)
+      description: Charging power (negative for charging), default -1300.
       example: -1300
       required: false
       selector:
@@ -21,19 +21,19 @@ charge:
           step: 100
 
 discharge:
-  name: 放电
-  description: 以手动模式全天放电，正功率代表放电。
+  name: Discharge
+  description: Discharge in manual mode all day, positive power represents discharging.
   fields:
     host:
-      name: 设备IP
-      description: 目标设备的 IP 地址，例如 192.168.3.91
+      name: Device IP
+      description: Target device IP address, e.g. 192.168.3.91
       example: 192.168.3.91
       required: true
       selector:
         text:
     power:
-      name: 功率(W)
-      description: 放电功率（正数为放电），默认 1300。
+      name: Power (W)
+      description: Discharging power (positive for discharging), default 1300.
       example: 1300
       required: false
       selector:
@@ -43,12 +43,12 @@ discharge:
           step: 100
 
 stop:
-  name: 停止充放电
-  description: 手动模式下将 enable 置 0。
+  name: Stop Charge/Discharge
+  description: Set enable to 0 in manual mode.
   fields:
     host:
-      name: 设备IP
-      description: 目标设备的 IP 地址，例如 192.168.3.91
+      name: Device IP
+      description: Target device IP address, e.g. 192.168.3.91
       example: 192.168.3.91
       required: true
       selector:

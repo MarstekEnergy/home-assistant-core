@@ -24,25 +24,25 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class MarstekUDPClient:
-    """UDP客户端，用于与Marstek设备通信."""
+    """UDP client for Marstek device communication."""
 
     def __init__(self, hass: HomeAssistant, port: int = DEFAULT_UDP_PORT) -> None:
-        """初始化UDP客户端."""
+        """Initialize UDP client."""
         self._hass = hass
         self._port = port
         self._socket: socket.socket | None = None
         self._pending_requests: dict[int, asyncio.Future] = {}
         self._response_cache: dict[int, dict[str, Any]] = {}
         self._listen_task: asyncio.Task | None = None
-        # 缓存机制
+        # Cache mechanism
         self._discovery_cache: list[dict[str, Any]] | None = None
         self._cache_timestamp: float = 0
-        self._cache_duration: float = 30.0  # 30秒缓存
-        # 固定本地发送IP（用于日志与对端回包识别）
+        self._cache_duration: float = 30.0  # 30 second cache
+        # Fixed local send IP (for logging and peer response identification)
         self._local_send_ip: str = "0.0.0.0"
 
     async def async_setup(self) -> None:
-        """设置UDP socket."""
+        """Setup UDP socket."""
         if self._socket is not None:
             return
 
@@ -51,16 +51,16 @@ class MarstekUDPClient:
         self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._socket.setblocking(False)
 
-        # 接收绑定到 0.0.0.0:30000，固定端口
+        # Bind receive to 0.0.0.0:30000, fixed port
         self._socket.bind(("0.0.0.0", 30000))
         _LOGGER.debug(
-            "UDP客户端已绑定到 %s:%s",
+            "UDP client bound to %s:%s",
             self._socket.getsockname()[0],
             self._socket.getsockname()[1],
         )
 
     async def async_cleanup(self) -> None:
-        """清理UDP socket."""
+        """Cleanup UDP socket."""
         if self._listen_task and not self._listen_task.done():
             self._listen_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -71,25 +71,25 @@ class MarstekUDPClient:
             self._socket = None
 
     def _get_broadcast_addresses(self) -> list[str]:
-        """获取广播地址列表，支持多网卡."""
+        """Get broadcast address list, supports multiple network cards."""
         addresses = set()
 
-        # 添加全网广播
+        # Add global broadcast
         addresses.add("255.255.255.255")
 
         try:
-            # 获取所有网络接口
+            # Get all network interfaces
             if psutil is None:
                 _LOGGER.warning("psutil not available, using only global broadcast")
             else:
                 for addrs in psutil.net_if_addrs().values():
                     for addr in addrs:
                         if addr.family == socket.AF_INET and not addr.address.startswith("127."):
-                            # 计算广播地址
+                            # Calculate broadcast address
                             if getattr(addr, "broadcast", None):
                                 addresses.add(addr.broadcast)
                             else:
-                                # 如果没有广播地址，计算子网广播地址
+                                # If no broadcast address, calculate subnet broadcast
                                 try:
                                     network = ipaddress.IPv4Network(f"{addr.address}/{addr.netmask}", strict=False)
                                     addresses.add(str(network.broadcast_address))
@@ -98,7 +98,7 @@ class MarstekUDPClient:
         except OSError as e:
             _LOGGER.warning("Failed to get network interfaces: %s", e)
 
-        # 过滤本机地址，避免处理自己的响应
+        # Filter local addresses to avoid processing own responses
         try:
             if psutil is not None:
                 local_ips = set()
@@ -113,17 +113,17 @@ class MarstekUDPClient:
         return list(addresses)
 
     def _is_cache_valid(self) -> bool:
-        """检查缓存是否有效."""
+        """Check if cache is valid."""
         if self._discovery_cache is None:
             return False
         current_time = asyncio.get_event_loop().time()
         return (current_time - self._cache_timestamp) < self._cache_duration
 
     def clear_discovery_cache(self) -> None:
-        """清除发现缓存."""
+        """Clear discovery cache."""
         self._discovery_cache = None
         self._cache_timestamp = 0
-        _LOGGER.debug("设备发现缓存已清除")
+        _LOGGER.debug("Device discovery cache cleared")
 
     async def _send_udp_message(
         self, message: str, target_ip: str, target_port: int
@@ -155,27 +155,27 @@ class MarstekUDPClient:
         if not self._socket:
             await self.async_setup()
 
-        # 解析消息获取ID
+        # Parse message to get ID
         try:
             message_obj = json.loads(message)
             request_id = message_obj["id"]
         except (json.JSONDecodeError, KeyError) as e:
-            _LOGGER.error("消息格式无效: %s", e)
+            _LOGGER.error("Invalid message format: %s", e)
             raise ValueError(f"Invalid message format: {e}") from e
 
-        # 创建响应收集的Future
+        # Create response collection Future
         future = asyncio.Future()
         self._pending_requests[request_id] = future
 
         try:
-            # 启动监听任务（如果还没启动）
+            # Start listening task (if not started)
             if not self._listen_task or self._listen_task.done():
                 self._listen_task = asyncio.create_task(self._listen_for_responses())
 
-            # 发送请求
+            # Send request
             await self._send_udp_message(message, target_ip, target_port)
 
-            # 等待响应
+            # Wait for response
             try:
                 return await asyncio.wait_for(future, timeout=timeout)
             except TimeoutError as err:
@@ -183,7 +183,7 @@ class MarstekUDPClient:
                 raise TimeoutError(f"Request timeout to {target_ip}:{target_port}") from err
 
         finally:
-            # 清理待响应请求
+            # Cleanup pending requests
             if request_id in self._pending_requests:
                 self._pending_requests.pop(request_id, None)
 
@@ -213,7 +213,7 @@ class MarstekUDPClient:
                     json.dumps(response, ensure_ascii=False),
                 )
 
-                # 存储到响应缓存中 - 参考Node.js的哈希表存储方式
+                # Store in response cache - reference Node.js hash table storage
                 if request_id:
                     self._response_cache[request_id] = {
                         "response": response,
@@ -225,12 +225,12 @@ class MarstekUDPClient:
                 if request_id and request_id in self._pending_requests:
                     future = self._pending_requests.pop(request_id)
                     if not future.done():
-                        future.set_result(response)  # 直接返回响应，不包装
+                        future.set_result(response)  # Return response directly, no wrapping
 
             except asyncio.CancelledError:
                 break
             except OSError as err:
-                _LOGGER.error("接收UDP响应时出错: %s", err)
+                _LOGGER.error("Error receiving UDP response: %s", err)
                 await asyncio.sleep(1)
 
     async def send_broadcast_request(
@@ -240,27 +240,27 @@ class MarstekUDPClient:
         if not self._socket:
             await self.async_setup()
 
-        # 解析消息获取ID
+        # Parse message to get ID
         try:
             message_obj = json.loads(message)
             request_id = message_obj["id"]
         except (json.JSONDecodeError, KeyError) as e:
-            _LOGGER.error("消息格式无效: %s", e)
+            _LOGGER.error("Invalid message format: %s", e)
             return []
 
         responses = []
         start_time = asyncio.get_event_loop().time()
 
-        # 创建响应收集的Future
+        # Create response collection Future
         future = asyncio.Future()
         self._pending_requests[request_id] = future
 
         try:
-            # 启动监听任务
+            # Start listening task
             if not self._listen_task or self._listen_task.done():
                 self._listen_task = asyncio.create_task(self._listen_for_responses())
 
-            # 发送广播请求
+            # Send broadcast request
             broadcast_addresses = self._get_broadcast_addresses()
             _LOGGER.debug("Broadcast targets: %s", broadcast_addresses)
 
@@ -272,31 +272,31 @@ class MarstekUDPClient:
             _LOGGER.debug("Broadcast payload: %s", message)
             _LOGGER.debug("Target port: %s", self._port)
 
-            # 等待响应 - 参考Node.js的哈希表轮询方式
+            # Wait for responses - reference Node.js hash table polling
             _LOGGER.debug("Start waiting for responses, timeout: %d s", timeout)
             try:
                 while (asyncio.get_event_loop().time() - start_time) < timeout:
-                    # 检查响应缓存中是否有新响应
+                    # Check if there are new responses in cache
                     if request_id in self._response_cache:
                         cached_response = self._response_cache[request_id]
                         responses.append(cached_response["response"])
                         _LOGGER.debug("Broadcast ID:%s received %d response(s)", request_id, len(responses))
-                        # 移除已处理的缓存响应
+                        # Remove processed cached response
                         del self._response_cache[request_id]
 
-                    # 等待一小段时间再检查
+                    # Wait a short time before checking again
                     await asyncio.sleep(0.1)
 
-                    # 检查是否超时
+                    # Check if timeout
                     if (asyncio.get_event_loop().time() - start_time) >= timeout:
                         _LOGGER.debug("Broadcast ID:%s wait timeout", request_id)
                         break
 
             except OSError as e:
-                _LOGGER.error("等待响应时发生错误: %s", e)
+                _LOGGER.error("Error waiting for response: %s", e)
 
         finally:
-            # 清理待响应请求
+            # Cleanup pending requests
             if request_id in self._pending_requests:
                 self._pending_requests.pop(request_id, None)
 
@@ -304,26 +304,26 @@ class MarstekUDPClient:
         return responses
 
     async def discover_devices(self, use_cache: bool = True) -> list[dict[str, Any]]:
-        """发现网络中的Marstek设备，等待10秒收集所有响应并去重."""
-        # 检查缓存
+        """Discover Marstek devices on network, wait 10s to collect all responses and deduplicate."""
+        # Check cache
         if use_cache and self._is_cache_valid():
             _LOGGER.debug("Using cached discovery results")
             return self._discovery_cache.copy()
 
         devices = []
-        seen_devices = set()  # 用于去重，基于MAC地址或IP地址
+        seen_devices = set()  # For deduplication, based on MAC or IP address
 
         try:
-            # 发送广播发现请求，等待10秒收集所有响应
+            # Send broadcast discovery request, wait 10s to collect all responses
             discover_command = discover()
             responses = await self.send_broadcast_request(discover_command)
 
             for response in responses:
                 if response.get("result"):
-                    # 解析设备信息
+                    # Parse device information
                     device_info = response["result"]
 
-                    # 获取设备唯一标识符（优先使用IP地址，因为MAC可能重复）
+                    # Get device unique identifier (prefer IP address as MAC may be duplicate)
                     device_id = (
                         device_info.get("ip", "") or
                         device_info.get("ble_mac") or
@@ -331,7 +331,7 @@ class MarstekUDPClient:
                         f"device_{int(asyncio.get_event_loop().time())}_{hash(str(device_info)) % 10000}"
                     )
 
-                    # 去重检查
+                    # Deduplication check
                     if device_id in seen_devices:
                         _LOGGER.debug("Skip duplicate device: %s (IP: %s, BLE_MAC: %s, WiFi_MAC: %s)",
                                      device_id, device_info.get("ip"),
@@ -343,18 +343,18 @@ class MarstekUDPClient:
                                  device_id, device_info.get("ip"),
                                  device_info.get("ble_mac"), device_info.get("wifi_mac"))
 
-                    # 构建完整的设备信息
+                    # Build complete device information
                     device = {
                         "id": device_info.get("id", 0),
-                        "device_type": device_info.get("device", "Unknown"),  # 设备类型
-                        "version": device_info.get("ver", 0),  # 版本号
-                        "wifi_name": device_info.get("wifi_name", ""),  # WiFi名称
-                        "ip": device_info.get("ip", ""),  # IP地址
+                        "device_type": device_info.get("device", "Unknown"),  # Device type
+                        "version": device_info.get("ver", 0),  # Version number
+                        "wifi_name": device_info.get("wifi_name", ""),  # WiFi name
+                        "ip": device_info.get("ip", ""),  # IP address
                         "wifi_mac": device_info.get("wifi_mac", ""),  # WiFi MAC
                         "ble_mac": device_info.get("ble_mac", ""),  # BLE MAC
-                        "mac": device_info.get("wifi_mac") or device_info.get("ble_mac", ""),  # 兼容性字段
-                        "model": device_info.get("device", "Unknown"),  # 兼容性字段
-                        "firmware": str(device_info.get("ver", 0)),  # 兼容性字段
+                        "mac": device_info.get("wifi_mac") or device_info.get("ble_mac", ""),  # Compatibility field
+                        "model": device_info.get("device", "Unknown"),  # Compatibility field
+                        "firmware": str(device_info.get("ver", 0)),  # Compatibility field
                     }
 
                     devices.append(device)
@@ -365,7 +365,7 @@ class MarstekUDPClient:
         except OSError as err:
             _LOGGER.error("Device discovery failed: %s", err)
 
-        # 更新缓存
+        # Update cache
         self._discovery_cache = devices.copy()
         self._cache_timestamp = asyncio.get_event_loop().time()
 

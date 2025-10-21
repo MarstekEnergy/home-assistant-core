@@ -139,7 +139,7 @@ class MarstekNumber(NumberEntity):
             # ES.SetMode returns result.set_result as boolean
             if result.get("result", {}).get("set_result"):
                 _LOGGER.info("Device %s power control success, value: %s", self._device_ip, value)
-                # 更新本地状态
+                # Update local state
                 if not self.coordinator.data:
                     self.coordinator.data = {}
                 self.coordinator.data[f"{self._number_type}_value"] = value
@@ -230,9 +230,9 @@ async def async_setup_entry(
 
     # Create number entities
     numbers = [
-        MarstekChargePowerNumber(coordinator, device_info),  # 充电功率
-        MarstekDischargePowerNumber(coordinator, device_info),  # 放电功率
-        MarstekTargetSOCNumber(coordinator, device_info),  # 目标电量
+        MarstekChargePowerNumber(coordinator, device_info),  # Charge power
+        MarstekDischargePowerNumber(coordinator, device_info),  # Discharge power
+        MarstekTargetSOCNumber(coordinator, device_info),  # Target SOC
     ]
 
     # Provide UDP client reference for each number entity

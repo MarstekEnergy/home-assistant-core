@@ -10,9 +10,7 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_MAC, CONF_NAME
-from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN
 from .udp_client import MarstekUDPClient
@@ -42,10 +40,10 @@ class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # User has selected a device from the discovered list
             device_index = int(user_input["device"])
             device = self.discovered_devices[device_index]
-            
-            # Check if device is already configured (使用IP地址作为唯一标识符)
+
+            # Check if device is already configured (use IP as unique identifier)
             unique_id = device["ip"] or device["mac"]
-            _LOGGER.info("检查设备唯一性: IP=%s, MAC=%s, 唯一ID=%s", 
+            _LOGGER.info("Check device uniqueness: IP=%s, MAC=%s, unique_id=%s",
                         device["ip"], device["mac"], unique_id)
             await self.async_set_unique_id(unique_id)
             self._abort_if_unique_id_configured()
@@ -60,36 +58,36 @@ class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "wifi_name": device["wifi_name"],
                     "wifi_mac": device["wifi_mac"],
                     "ble_mac": device["ble_mac"],
-                    "model": device["model"],  # 兼容性字段
-                    "firmware": device["firmware"],  # 兼容性字段
+                    "model": device["model"],  # Compatibility field
+                    "firmware": device["firmware"],  # Compatibility field
                 },
             )
 
         # Start broadcast device discovery
         try:
-            _LOGGER.info("开始发现设备...")
+            _LOGGER.info("Starting device discovery...")
             udp_client = MarstekUDPClient(self.hass)
             await udp_client.async_setup()
-            
-            # 执行广播发现，参考Node.js代码的重试机制
+
+            # Execute broadcast discovery with retry mechanism
             devices = await self._discover_devices_with_retry(udp_client)
             await udp_client.async_cleanup()
-            
+
             if not devices:
                 return self.async_show_form(
                     step_id="user",
                     data_schema=vol.Schema({}),
                     errors={"base": "no_devices_found"},
                 )
-            
+
             # Store discovered devices for selection
             self.discovered_devices = devices
-            _LOGGER.info(f"发现 {len(devices)} 个设备")
-            
+            _LOGGER.info("Discovered %d devices", len(devices))
+
             # Show device selection form with detailed device information
             device_options = {}
             for i, device in enumerate(devices):
-                # 构建详细的设备显示名称，包含所有重要信息
+                # Build detailed device display name with all important info
                 device_name = (
                     f"{device.get('device_type', 'Unknown')} "
                     f"v{device.get('version', 'Unknown')} "
@@ -97,7 +95,7 @@ class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     f"- {device.get('ip', 'Unknown')}"
                 )
                 device_options[str(i)] = device_name
-            
+
             return self.async_show_form(
                 step_id="user",
                 data_schema=vol.Schema({
@@ -107,9 +105,9 @@ class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "devices": "\n".join([f"- {name}" for name in device_options.values()])
                 }
             )
-            
-        except Exception as err:
-            _LOGGER.error("设备发现失败: %s", err)
+
+        except (OSError, TimeoutError, ValueError) as err:
+            _LOGGER.error("Device discovery failed: %s", err)
             return self.async_show_form(
                 step_id="user",
                 data_schema=vol.Schema({}),
@@ -117,37 +115,36 @@ class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
     async def _discover_devices_with_retry(self, udp_client, max_retries=2, retry_delay=3000):
-        """设备发现重试机制，参考Node.js代码"""
+        """Device discovery retry mechanism."""
         for attempt in range(1, max_retries + 1):
             try:
                 if attempt > 1:
-                    _LOGGER.info(f"设备发现，第 {attempt} 次重试...")
-                    await asyncio.sleep(retry_delay / 1000)  # 转换为秒
-                    # 清除缓存，强制重新发现
+                    _LOGGER.info("Device discovery, attempt %d...", attempt)
+                    await asyncio.sleep(retry_delay / 1000)  # Convert to seconds
+                    # Clear cache, force re-discovery
                     udp_client.clear_discovery_cache()
-                
-                # 第一次尝试使用缓存，重试时强制刷新
+
+                # First attempt uses cache, retries force refresh
                 use_cache = (attempt == 1)
                 devices = await udp_client.discover_devices(use_cache=use_cache)
-                
+
                 if devices:
                     if attempt > 1:
-                        _LOGGER.info("设备发现重试成功")
+                        _LOGGER.info("Device discovery retry successful")
                     return devices
-                else:
-                    _LOGGER.warning(f"第 {attempt} 次尝试未发现设备")
-                    
-            except Exception as error:
-                _LOGGER.error(f"设备发现失败，第 {attempt} 次尝试: {error}")
-                
+                _LOGGER.warning("Attempt %d found no devices", attempt)
+
+            except (OSError, TimeoutError, ValueError) as error:
+                _LOGGER.error("Device discovery failed, attempt %d: %s", attempt, error)
+
                 if attempt == max_retries:
-                    _LOGGER.error(f"设备发现失败，已重试 {max_retries} 次: {error}")
-                    # 尝试使用缓存数据作为备选
-                    if udp_client._discovery_cache:
-                        _LOGGER.info("使用缓存的设备数据作为备选")
-                        return udp_client._discovery_cache.copy()
-                    raise error
-        
+                    _LOGGER.error("Device discovery failed after %d retries: %s", max_retries, error)
+                    # Try using cached data as fallback
+                    if udp_client._discovery_cache:  # noqa: SLF001 - internal access needed for fallback
+                        _LOGGER.info("Using cached device data as fallback")
+                        return udp_client._discovery_cache.copy()  # noqa: SLF001 - internal access needed for fallback
+                    raise
+
         return []
 
     async def async_step_zeroconf(self, discovery_info: dict[str, Any]) -> FlowResult:

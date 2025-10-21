@@ -212,10 +212,10 @@ async def async_setup_entry(
 
     # Create button entities
     buttons = [
-        MarstekStopAllButton(coordinator, device_info),  # 停止所有
-        MarstekMaxChargeButton(coordinator, device_info),  # 最大充电
-        MarstekMaxDischargeButton(coordinator, device_info),  # 最大放电
-        MarstekEmergencyStopButton(coordinator, device_info),  # 紧急停止
+        MarstekStopAllButton(coordinator, device_info),  # Stop all
+        MarstekMaxChargeButton(coordinator, device_info),  # Max charge
+        MarstekMaxDischargeButton(coordinator, device_info),  # Max discharge
+        MarstekEmergencyStopButton(coordinator, device_info),  # Emergency stop
     ]
 
     # Provide UDP client reference for each button

@@ -124,7 +124,7 @@ class MarstekSwitch(SwitchEntity):
             # ES.SetMode returns result.set_result as boolean
             if result.get("result", {}).get("set_result"):
                 _LOGGER.info("Device %s control success", self._device_ip)
-                # 更新本地状态
+                # Update local state
                 if not self.coordinator.data:
                     self.coordinator.data = {}
                 self.coordinator.data[f"{self._switch_type}_enabled"] = enable
@@ -206,9 +206,9 @@ async def async_setup_entry(
 
     # Create switch entities
     switches = [
-        MarstekChargeSwitch(coordinator, device_info),  # 充电开关
-        MarstekDischargeSwitch(coordinator, device_info),  # 放电开关
-        MarstekAutoModeSwitch(coordinator, device_info),  # 自动模式开关
+        MarstekChargeSwitch(coordinator, device_info),  # Charge switch
+        MarstekDischargeSwitch(coordinator, device_info),  # Discharge switch
+        MarstekAutoModeSwitch(coordinator, device_info),  # Auto mode switch
     ]
 
     # Provide UDP client reference (reuse global instance)
