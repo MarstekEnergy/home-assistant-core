@@ -6,19 +6,19 @@
 
 from __future__ import annotations
 
-from typing import Any
-import voluptuous as vol
 import asyncio
 import logging
+from typing import Any
 
+import voluptuous as vol
+
+from homeassistant.const import CONF_DEVICE_ID, CONF_DOMAIN, CONF_TYPE
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.typing import ConfigType
-from homeassistant.helpers import config_validation as cv
-from homeassistant.const import CONF_DEVICE_ID, CONF_TYPE, CONF_DOMAIN
 
-from .const import DOMAIN
-from .command_builder import build_command, CMD_ES_SET_MODE
+from .command_builder import CMD_ES_SET_MODE, build_command
+from .const import DEFAULT_UDP_PORT, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ async def async_get_actions(hass: HomeAssistant, device_id: str) -> list[dict[st
     """List device actions for a Marstek device."""
     actions: list[dict[str, Any]] = []
 
-    # 仅对属于本集成的设备暴露动作
+    # Only expose actions for this integration
     dev_reg = dr.async_get(hass)
     device = dev_reg.async_get(device_id)
     if not device:
@@ -53,14 +53,14 @@ async def async_get_actions(hass: HomeAssistant, device_id: str) -> list[dict[st
     if not any(ident[0] == DOMAIN for ident in device.identifiers):
         return actions
 
-    for action in (ACTION_CHARGE, ACTION_DISCHARGE, ACTION_STOP):
-        actions.append(
-            {
-                "domain": DOMAIN,
-                "type": action,
-                "device_id": device_id,
-            }
-        )
+    actions.extend(
+        {
+            "domain": DOMAIN,
+            "type": action,
+            "device_id": device_id,
+        }
+        for action in (ACTION_CHARGE, ACTION_DISCHARGE, ACTION_STOP)
+    )
 
     return actions
 
@@ -68,8 +68,7 @@ async def async_get_actions(hass: HomeAssistant, device_id: str) -> list[dict[st
 async def _get_host_from_device(hass: HomeAssistant, device_id: str) -> str | None:
     """Resolve device IP(host) via device registry and config entries.
 
-    我们在实体里把 identifiers 设为 (DOMAIN, ip)，因此可直接用 identifiers 取 IP。
-    兜底：从关联的 config_entry.data["host"] 拿。
+    Identifiers are (DOMAIN, ip), so read IP directly; fallback to config entry host.
     """
     dev_reg = dr.async_get(hass)
     device = dev_reg.async_get(device_id)
@@ -104,7 +103,7 @@ async def async_call_action_from_config(
     if not host:
         return
 
-    # 充/放电/停止：写死全天 00:00-23:59, week_set=127
+    # Charge/Discharge/Stop: 00:00-23:59, week_set=127
     if action_type == ACTION_CHARGE:
         power = -1300
         enable = 1
@@ -133,37 +132,35 @@ async def async_call_action_from_config(
     }
     command = build_command(CMD_ES_SET_MODE, payload)
 
-    # 通过全局 UDP 客户端发送
+    # Send via global UDP client
     udp = hass.data.get(DOMAIN, {}).get("udp_client")
     if not udp:
         return
-    
-    # 重试机制：最多重试3次，间隔2秒
+
+    # Retry up to 5 times with 2s delay
     max_retries = 5
     retry_delay = 2.0
-    
+
     for attempt in range(max_retries):
         try:
-            await udp.send_request(command, host, udp._port, timeout=8.0)  # 增加超时到8秒
-            # 成功则直接返回
-            return
-        except Exception as e:
-            if attempt < max_retries - 1:  # 不是最后一次尝试
-                # 记录重试日志
-                action_name = {"charge": "充电", "discharge": "放电", "stop": "停止"}.get(action_type, action_type)
+            await udp.send_request(command, host, DEFAULT_UDP_PORT, timeout=8.0)
+        except (TimeoutError, OSError, ValueError) as e:
+            if attempt < max_retries - 1:
+                action_name = {"charge": "charge", "discharge": "discharge", "stop": "stop"}.get(action_type, action_type)
                 _LOGGER.warning(
-                    "设备动作 %s 第 %d 次尝试失败 (设备: %s): %s，%d 秒后重试",
+                    "Action %s attempt %d failed (device: %s): %s, retry in %d s",
                     action_name, attempt + 1, host, str(e), int(retry_delay)
                 )
                 await asyncio.sleep(retry_delay)
             else:
-                # 最后一次尝试也失败了，记录错误并抛出异常
-                action_name = {"charge": "充电", "discharge": "放电", "stop": "停止"}.get(action_type, action_type)
+                action_name = {"charge": "charge", "discharge": "discharge", "stop": "stop"}.get(action_type, action_type)
                 _LOGGER.error(
-                    "设备动作 %s 重试 %d 次后仍然失败 (设备: %s): %s",
+                    "Action %s failed after %d retries (device: %s): %s",
                     action_name, max_retries, host, str(e)
                 )
                 raise
+        else:
+            return
 
 
 async def async_get_action_capabilities(

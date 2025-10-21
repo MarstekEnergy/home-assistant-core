@@ -11,15 +11,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DOMAIN
-from .sensor import MarstekDataUpdateCoordinator
-from .udp_client import MarstekUDPClient
 from .command_builder import (
+    CMD_ES_SET_MODE,
+    build_command,
     set_es_mode_manual_charge,
     set_es_mode_manual_discharge,
-    build_command,
-    CMD_ES_SET_MODE,
 )
+from .const import DEFAULT_UDP_PORT, DOMAIN
+from .sensor import MarstekDataUpdateCoordinator
+from .udp_client import MarstekUDPClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class MarstekButton(ButtonEntity):
     def device_info(self) -> dict[str, Any]:
         """Return device info."""
         return {
-            # 用IP作为设备标识，和传感器/开关/数值一致，避免分裂成两个设备
+            # Use IP as device identifier, consistent with other platforms
             "identifiers": {(DOMAIN, self._device_info["ip"])},
             "name": f"Marstek {self._device_info['device_type']} v{self._device_info['version']}",
             "manufacturer": "Marstek",
@@ -72,12 +72,12 @@ class MarstekButton(ButtonEntity):
     async def _send_control_command(self) -> None:
         """Send control command to device."""
         if not self._udp_client:
-            _LOGGER.error("UDP客户端未初始化")
+            _LOGGER.error("UDP client not initialized")
             return
 
         try:
             if self._button_type == "stop_all":
-                # 停止所有充放电
+                # Stop all charge/discharge
                 config = {
                     "mode": "Manual",
                     "manual_cfg": {
@@ -90,17 +90,17 @@ class MarstekButton(ButtonEntity):
                     }
                 }
                 command = build_command(CMD_ES_SET_MODE, {"id": 0, "config": config})
-                
+
             elif self._button_type == "max_charge":
-                # 最大功率充电
+                # Max power charge
                 command = set_es_mode_manual_charge(0, -2000)
-                
+
             elif self._button_type == "max_discharge":
-                # 最大功率放电
+                # Max power discharge
                 command = set_es_mode_manual_discharge(0, 2000)
-                
+
             elif self._button_type == "emergency_stop":
-                # 紧急停止
+                # Emergency stop
                 config = {
                     "mode": "Passive",
                     "passive_cfg": {
@@ -108,24 +108,24 @@ class MarstekButton(ButtonEntity):
                     }
                 }
                 command = build_command(CMD_ES_SET_MODE, {"id": 0, "config": config})
-                
+
             else:
-                _LOGGER.error("未知的按钮类型: %s", self._button_type)
+                _LOGGER.error("Unknown button type: %s", self._button_type)
                 return
 
-            _LOGGER.info("发送快捷操作命令到设备 %s: %s", self._device_ip, command)
+            _LOGGER.info("Send quick operation to %s: %s", self._device_ip, command)
             result = await self._udp_client.send_request(
-                command, self._device_ip, self._udp_client._port, timeout=5.0
+                command, self._device_ip, DEFAULT_UDP_PORT, timeout=5.0
             )
-            
-            # 判断结果：根据 API 文档，ES.SetMode 返回 result.set_result 布尔值
+
+            # ES.SetMode returns result.set_result as boolean
             if result.get("result", {}).get("set_result"):
-                _LOGGER.info("设备 %s 快捷操作命令执行成功: %s", self._device_ip, self._button_type)
+                _LOGGER.info("Device %s quick operation success: %s", self._device_ip, self._button_type)
             else:
-                _LOGGER.error("设备 %s 快捷操作命令执行失败: %s", self._device_ip, result)
-                
-        except Exception as err:
-            _LOGGER.error("发送快捷操作命令失败: %s", str(err))
+                _LOGGER.error("Device %s quick operation failed: %s", self._device_ip, result)
+
+        except (TimeoutError, OSError, ValueError) as err:
+            _LOGGER.error("Quick operation failed: %s", str(err))
 
 
 class MarstekStopAllButton(MarstekButton):
@@ -187,16 +187,16 @@ async def async_setup_entry(
 ) -> None:
     """Set up Marstek buttons based on a config entry."""
     device_ip = config_entry.data["host"]
-    _LOGGER.info("正在设置Marstek设备按钮: %s", device_ip)
-    
-    # 复用全局共享的UDP客户端
+    _LOGGER.info("Setting up Marstek buttons: %s", device_ip)
+
+    # Reuse global shared UDP client
     store = hass.data.setdefault(DOMAIN, {})
     if "udp_client" not in store:
         store["udp_client"] = MarstekUDPClient(hass)
         await store["udp_client"].async_setup()
     udp_client: MarstekUDPClient = store["udp_client"]
 
-    # 从配置中获取设备信息
+    # Build device info from config entry
     device_info = {
         "ip": config_entry.data["host"],
         "mac": config_entry.data["mac"],
@@ -207,10 +207,10 @@ async def async_setup_entry(
         "ble_mac": config_entry.data.get("ble_mac", ""),
     }
 
-    # 创建该设备的独立数据更新协调器
+    # Create coordinator for this device
     coordinator = MarstekDataUpdateCoordinator(hass, udp_client, device_info["ip"])
 
-    # 创建按钮实体
+    # Create button entities
     buttons = [
         MarstekStopAllButton(coordinator, device_info),  # 停止所有
         MarstekMaxChargeButton(coordinator, device_info),  # 最大充电
@@ -218,9 +218,9 @@ async def async_setup_entry(
         MarstekEmergencyStopButton(coordinator, device_info),  # 紧急停止
     ]
 
-    # 为每个按钮设置UDP客户端引用
+    # Provide UDP client reference for each button
     for button in buttons:
-        button._udp_client = udp_client
+        button._udp_client = udp_client  # noqa: SLF001 - internal wiring acceptable within integration
 
-    _LOGGER.info("设备 %s 按钮设置完成，共创建 %d 个按钮", device_ip, len(buttons))
+    _LOGGER.info("Device %s buttons set up, total %d", device_ip, len(buttons))
     async_add_entities(buttons)

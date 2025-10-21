@@ -11,10 +11,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DOMAIN
+from .command_builder import CMD_ES_SET_MODE, build_command
+from .const import DEFAULT_UDP_PORT, DOMAIN
 from .sensor import MarstekDataUpdateCoordinator
 from .udp_client import MarstekUDPClient
-from .command_builder import build_command, CMD_ES_SET_MODE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ class MarstekNumber(NumberEntity):
         self._number_type = number_type
         self._device_ip = device_info["ip"]
         self._udp_client = None
-        
+
         self._attr_native_min_value = min_value
         self._attr_native_max_value = max_value
         self._attr_native_step = step
@@ -61,7 +61,7 @@ class MarstekNumber(NumberEntity):
     def device_info(self) -> dict[str, Any]:
         """Return device info."""
         return {
-            # 用IP作为设备标识，避免MAC重复导致设备被合并
+            # Use IP as identifier to avoid merges on duplicate MACs
             "identifiers": {(DOMAIN, self._device_info["ip"])},
             "name": f"Marstek {self._device_info['device_type']} v{self._device_info['version']}",
             "manufacturer": "Marstek",
@@ -84,12 +84,12 @@ class MarstekNumber(NumberEntity):
     async def _send_control_command(self, value: float) -> None:
         """Send control command to device."""
         if not self._udp_client:
-            _LOGGER.error("UDP客户端未初始化")
+            _LOGGER.error("UDP client not initialized")
             return
 
         try:
             if self._number_type == "charge_power":
-                # 充电功率（负数）
+                # Charge power (negative)
                 power = int(-abs(value))
                 config = {
                     "mode": "Manual",
@@ -103,7 +103,7 @@ class MarstekNumber(NumberEntity):
                     }
                 }
             elif self._number_type == "discharge_power":
-                # 放电功率（正数）
+                # Discharge power (positive)
                 power = int(abs(value))
                 config = {
                     "mode": "Manual",
@@ -117,7 +117,7 @@ class MarstekNumber(NumberEntity):
                     }
                 }
             elif self._number_type == "target_soc":
-                # 目标电量设置
+                # Target SOC setting
                 config = {
                     "mode": "Auto",
                     "auto_cfg": {
@@ -126,28 +126,28 @@ class MarstekNumber(NumberEntity):
                     }
                 }
             else:
-                _LOGGER.error("未知的数字类型: %s", self._number_type)
+                _LOGGER.error("Unknown number type: %s", self._number_type)
                 return
 
             command = build_command(CMD_ES_SET_MODE, {"id": 0, "config": config})
-            _LOGGER.info("发送功率控制命令到设备 %s: %s", self._device_ip, command)
-            
+            _LOGGER.info("Send power control to %s: %s", self._device_ip, command)
+
             result = await self._udp_client.send_request(
-                command, self._device_ip, self._udp_client._port, timeout=5.0
+                command, self._device_ip, DEFAULT_UDP_PORT, timeout=5.0
             )
-            
-            # 判断结果：根据 API 文档，ES.SetMode 返回 result.set_result 布尔值
+
+            # ES.SetMode returns result.set_result as boolean
             if result.get("result", {}).get("set_result"):
-                _LOGGER.info("设备 %s 功率控制命令执行成功，设置值: %s", self._device_ip, value)
+                _LOGGER.info("Device %s power control success, value: %s", self._device_ip, value)
                 # 更新本地状态
                 if not self.coordinator.data:
                     self.coordinator.data = {}
                 self.coordinator.data[f"{self._number_type}_value"] = value
             else:
-                _LOGGER.error("设备 %s 功率控制命令执行失败: %s", self._device_ip, result)
-                
-        except Exception as err:
-            _LOGGER.error("发送功率控制命令失败: %s", str(err))
+                _LOGGER.error("Device %s power control failed: %s", self._device_ip, result)
+
+        except (TimeoutError, OSError, ValueError) as err:
+            _LOGGER.error("Power control failed: %s", str(err))
 
 
 class MarstekChargePowerNumber(MarstekNumber):
@@ -160,7 +160,7 @@ class MarstekChargePowerNumber(MarstekNumber):
     ) -> None:
         """Initialize the charge power number."""
         super().__init__(
-            coordinator, device_info, "charge_power", 
+            coordinator, device_info, "charge_power",
             0, 2000, 100, "W"
         )
         self._attr_icon = "mdi:battery-charging"
@@ -176,7 +176,7 @@ class MarstekDischargePowerNumber(MarstekNumber):
     ) -> None:
         """Initialize the discharge power number."""
         super().__init__(
-            coordinator, device_info, "discharge_power", 
+            coordinator, device_info, "discharge_power",
             0, 2000, 100, "W"
         )
         self._attr_icon = "mdi:battery-minus"
@@ -192,7 +192,7 @@ class MarstekTargetSOCNumber(MarstekNumber):
     ) -> None:
         """Initialize the target SOC number."""
         super().__init__(
-            coordinator, device_info, "target_soc", 
+            coordinator, device_info, "target_soc",
             0, 100, 5, "%"
         )
         self._attr_icon = "mdi:battery-heart"
@@ -205,16 +205,16 @@ async def async_setup_entry(
 ) -> None:
     """Set up Marstek numbers based on a config entry."""
     device_ip = config_entry.data["host"]
-    _LOGGER.info("正在设置Marstek设备数值控制: %s", device_ip)
-    
-    # 复用全局共享的UDP客户端
+    _LOGGER.info("Setting up Marstek number entities: %s", device_ip)
+
+    # Reuse global shared UDP client
     store = hass.data.setdefault(DOMAIN, {})
     if "udp_client" not in store:
         store["udp_client"] = MarstekUDPClient(hass)
         await store["udp_client"].async_setup()
     udp_client: MarstekUDPClient = store["udp_client"]
 
-    # 从配置中获取设备信息
+    # Build device info from config entry
     device_info = {
         "ip": config_entry.data["host"],
         "mac": config_entry.data["mac"],
@@ -225,19 +225,19 @@ async def async_setup_entry(
         "ble_mac": config_entry.data.get("ble_mac", ""),
     }
 
-    # 创建该设备的独立数据更新协调器
+    # Create coordinator for this device
     coordinator = MarstekDataUpdateCoordinator(hass, udp_client, device_info["ip"])
 
-    # 创建数值控制实体
+    # Create number entities
     numbers = [
         MarstekChargePowerNumber(coordinator, device_info),  # 充电功率
         MarstekDischargePowerNumber(coordinator, device_info),  # 放电功率
         MarstekTargetSOCNumber(coordinator, device_info),  # 目标电量
     ]
 
-    # 为每个数值控制设置UDP客户端引用
+    # Provide UDP client reference for each number entity
     for number in numbers:
-        number._udp_client = udp_client
+        number._udp_client = udp_client  # noqa: SLF001 - internal wiring acceptable within integration
 
-    _LOGGER.info("设备 %s 数值控制设置完成，共创建 %d 个数值控制", device_ip, len(numbers))
+    _LOGGER.info("Device %s number entities set up, total %d", device_ip, len(numbers))
     async_add_entities(numbers)

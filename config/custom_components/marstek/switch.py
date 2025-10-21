@@ -11,15 +11,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DOMAIN
-from .sensor import MarstekDataUpdateCoordinator
-from .udp_client import MarstekUDPClient
 from .command_builder import (
+    CMD_ES_SET_MODE,
+    build_command,
     set_es_mode_manual_charge,
     set_es_mode_manual_discharge,
-    build_command,
-    CMD_ES_SET_MODE,
 )
+from .const import DEFAULT_UDP_PORT, DOMAIN
+from .sensor import MarstekDataUpdateCoordinator
+from .udp_client import MarstekUDPClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class MarstekSwitch(SwitchEntity):
     def device_info(self) -> dict[str, Any]:
         """Return device info."""
         return {
-            # 用IP作为设备标识，避免MAC重复导致设备被合并
+            # Use IP as identifier to avoid merges on duplicate MACs
             "identifiers": {(DOMAIN, self._device_info["ip"])},
             "name": f"Marstek {self._device_info['device_type']} v{self._device_info['version']}",
             "manufacturer": "Marstek",
@@ -83,7 +83,7 @@ class MarstekSwitch(SwitchEntity):
     async def _send_control_command(self, enable: bool) -> None:
         """Send control command to device."""
         if not self._udp_client:
-            _LOGGER.error("UDP客户端未初始化")
+            _LOGGER.error("UDP client not initialized")
             return
 
         try:
@@ -95,11 +95,11 @@ class MarstekSwitch(SwitchEntity):
                 command = set_es_mode_manual_discharge(0, power)
             elif self._switch_type == "auto_mode":
                 if enable:
-                    # 切换到自动模式
+                    # Switch to auto mode
                     config = {"mode": "Auto"}
                     command = build_command(CMD_ES_SET_MODE, {"id": 0, "config": config})
                 else:
-                    # 切换到手动模式
+                    # Switch to manual mode
                     config = {
                         "mode": "Manual",
                         "manual_cfg": {
@@ -113,26 +113,26 @@ class MarstekSwitch(SwitchEntity):
                     }
                     command = build_command(CMD_ES_SET_MODE, {"id": 0, "config": config})
             else:
-                _LOGGER.error("未知的开关类型: %s", self._switch_type)
+                _LOGGER.error("Unknown switch type: %s", self._switch_type)
                 return
 
-            _LOGGER.info("发送控制命令到设备 %s: %s", self._device_ip, command)
+            _LOGGER.info("Send control to %s: %s", self._device_ip, command)
             result = await self._udp_client.send_request(
-                command, self._device_ip, self._udp_client._port, timeout=5.0
+                command, self._device_ip, DEFAULT_UDP_PORT, timeout=5.0
             )
-            
-            # 判断结果：根据 API 文档，ES.SetMode 返回 result.set_result 布尔值
+
+            # ES.SetMode returns result.set_result as boolean
             if result.get("result", {}).get("set_result"):
-                _LOGGER.info("设备 %s 控制命令执行成功", self._device_ip)
+                _LOGGER.info("Device %s control success", self._device_ip)
                 # 更新本地状态
                 if not self.coordinator.data:
                     self.coordinator.data = {}
                 self.coordinator.data[f"{self._switch_type}_enabled"] = enable
             else:
-                _LOGGER.error("设备 %s 控制命令执行失败: %s", self._device_ip, result)
-                
-        except Exception as err:
-            _LOGGER.error("发送控制命令失败: %s", str(err))
+                _LOGGER.error("Device %s control failed: %s", self._device_ip, result)
+
+        except (TimeoutError, OSError, ValueError) as err:
+            _LOGGER.error("Control failed: %s", str(err))
 
 
 class MarstekChargeSwitch(MarstekSwitch):
@@ -181,16 +181,16 @@ async def async_setup_entry(
 ) -> None:
     """Set up Marstek switches based on a config entry."""
     device_ip = config_entry.data["host"]
-    _LOGGER.info("正在设置Marstek设备开关: %s", device_ip)
-    
-    # 复用全局共享的UDP客户端
+    _LOGGER.info("Setting up Marstek switches: %s", device_ip)
+
+    # Reuse global shared UDP client
     store = hass.data.setdefault(DOMAIN, {})
     if "udp_client" not in store:
         store["udp_client"] = MarstekUDPClient(hass)
         await store["udp_client"].async_setup()
     udp_client: MarstekUDPClient = store["udp_client"]
 
-    # 从配置中获取设备信息
+    # Build device info from config entry
     device_info = {
         "ip": config_entry.data["host"],
         "mac": config_entry.data["mac"],
@@ -201,19 +201,19 @@ async def async_setup_entry(
         "ble_mac": config_entry.data.get("ble_mac", ""),
     }
 
-    # 创建该设备的独立数据更新协调器
+    # Create coordinator for this device
     coordinator = MarstekDataUpdateCoordinator(hass, udp_client, device_info["ip"])
 
-    # 创建开关实体
+    # Create switch entities
     switches = [
         MarstekChargeSwitch(coordinator, device_info),  # 充电开关
         MarstekDischargeSwitch(coordinator, device_info),  # 放电开关
         MarstekAutoModeSwitch(coordinator, device_info),  # 自动模式开关
     ]
 
-    # 为每个开关设置UDP客户端引用（复用全局实例）
+    # Provide UDP client reference (reuse global instance)
     for switch in switches:
-        switch._udp_client = udp_client
+        switch._udp_client = udp_client  # noqa: SLF001 - internal wiring acceptable within integration
 
-    _LOGGER.info("设备 %s 开关设置完成，共创建 %d 个开关", device_ip, len(switches))
+    _LOGGER.info("Device %s switches set up, total %d", device_ip, len(switches))
     async_add_entities(switches)
