@@ -61,7 +61,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             },
         }
         command = build_command(CMD_ES_SET_MODE, payload)
-        await udp.send_request(command, host, DEFAULT_UDP_PORT, timeout=5.0)
+        await udp.send_request_with_polling_control(command, host, DEFAULT_UDP_PORT, timeout=2.0)
 
     async def _handle_charge(call) -> None:
         host: str = call.data["host"]

@@ -47,6 +47,12 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
         _LOGGER.debug("Start polling device: %s", self.device_ip)
         _LOGGER.debug("UDP client: %s", self.udp_client)
 
+        # Check if polling is paused for this device
+        if self.udp_client.is_polling_paused(self.device_ip):
+            _LOGGER.debug("Polling paused for device: %s, skipping update", self.device_ip)
+            # Return existing data to avoid clearing the state
+            return self.data or {}
+
         # Use existing data as defaults (preserve previous values)
         current_data = self.data or {}
         result_data = {

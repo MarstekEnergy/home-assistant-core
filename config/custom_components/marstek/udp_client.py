@@ -40,6 +40,9 @@ class MarstekUDPClient:
         self._cache_duration: float = 30.0  # 30 second cache
         # Fixed local send IP (for logging and peer response identification)
         self._local_send_ip: str = "0.0.0.0"
+        # Polling control mechanism
+        self._polling_paused: dict[str, bool] = {}  # Track paused devices by IP
+        self._polling_lock: asyncio.Lock = asyncio.Lock()
 
     async def async_setup(self) -> None:
         """Setup UDP socket."""
@@ -371,3 +374,33 @@ class MarstekUDPClient:
 
         _LOGGER.info("Device discovery finished, %d unique devices", len(devices))
         return devices
+
+    async def pause_polling(self, device_ip: str) -> None:
+        """Pause polling for a specific device."""
+        async with self._polling_lock:
+            self._polling_paused[device_ip] = True
+            _LOGGER.info("Polling paused for device: %s", device_ip)
+
+    async def resume_polling(self, device_ip: str) -> None:
+        """Resume polling for a specific device."""
+        async with self._polling_lock:
+            self._polling_paused[device_ip] = False
+            _LOGGER.info("Polling resumed for device: %s", device_ip)
+
+    def is_polling_paused(self, device_ip: str) -> bool:
+        """Check if polling is paused for a specific device."""
+        return self._polling_paused.get(device_ip, False)
+
+    async def send_request_with_polling_control(
+        self, message: str, target_ip: str, target_port: int, timeout: float = 5.0
+    ) -> dict[str, Any]:
+        """Send request with polling control - pause polling during request."""
+        # Pause polling for this device
+        await self.pause_polling(target_ip)
+
+        try:
+            # Send the request
+            return await self.send_request(message, target_ip, target_port, timeout)
+        finally:
+            # Always resume polling, regardless of success or failure
+            await self.resume_polling(target_ip)

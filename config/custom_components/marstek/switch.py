@@ -117,8 +117,8 @@ class MarstekSwitch(SwitchEntity):
                 return
 
             _LOGGER.info("Send control to %s: %s", self._device_ip, command)
-            result = await self._udp_client.send_request(
-                command, self._device_ip, DEFAULT_UDP_PORT, timeout=5.0
+            result = await self._udp_client.send_request_with_polling_control(
+                command, self._device_ip, DEFAULT_UDP_PORT, timeout=2.0
             )
 
             # ES.SetMode returns result.set_result as boolean

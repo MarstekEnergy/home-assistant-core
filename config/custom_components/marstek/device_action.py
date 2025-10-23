@@ -137,13 +137,14 @@ async def async_call_action_from_config(
     if not udp:
         return
 
-    # Retry up to 5 times with 2s delay
+    # Retry up to 5 times with 2s delay, using polling control
     max_retries = 5
     retry_delay = 2.0
 
     for attempt in range(max_retries):
         try:
-            await udp.send_request(command, host, DEFAULT_UDP_PORT, timeout=8.0)
+            # Use polling control to pause polling during action
+            await udp.send_request_with_polling_control(command, host, DEFAULT_UDP_PORT, timeout=2.0)
         except (TimeoutError, OSError, ValueError) as e:
             if attempt < max_retries - 1:
                 action_name = {"charge": "charge", "discharge": "discharge", "stop": "stop"}.get(action_type, action_type)
