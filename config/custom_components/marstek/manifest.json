@@ -1,6 +1,6 @@
 {
   "domain": "marstek",
-  "name": "Marstek Energy Storage",
+  "name": "Marstek",
   "version": "1.0.0",
   "codeowners": ["@ame"],
   "config_flow": true,
@@ -8,5 +8,6 @@
   "documentation": "https://www.home-assistant.io/integrations/marstek",
   "integration_type": "device",
   "iot_class": "local_push",
-  "requirements": []
+  "requirements": [],
+  "logo": "logo.png"
 }
