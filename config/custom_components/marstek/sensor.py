@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
 import logging
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE, UnitOfPower
+from homeassistant.const import (
+    PERCENTAGE,
+    UnitOfElectricCurrent,
+    UnitOfElectricPotential,
+    UnitOfPower,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
@@ -17,7 +22,7 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
 )
 
-from .command_builder import get_es_mode
+from .command_builder import get_es_mode, get_pv_status
 from .const import DEFAULT_UDP_PORT, DOMAIN
 from .udp_client import MarstekUDPClient
 
@@ -62,6 +67,23 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
             "battery_status": current_data.get("battery_status", "Unknown"),
             "device_ip": self.device_ip,
             "last_update": asyncio.get_event_loop().time(),
+            # PV data - with defaults
+            "pv1_power": current_data.get("pv1_power", 0),
+            "pv1_voltage": current_data.get("pv1_voltage", 0),
+            "pv1_current": current_data.get("pv1_current", 0),
+            "pv1_state": current_data.get("pv1_state", 0),
+            "pv2_power": current_data.get("pv2_power", 0),
+            "pv2_voltage": current_data.get("pv2_voltage", 0),
+            "pv2_current": current_data.get("pv2_current", 0),
+            "pv2_state": current_data.get("pv2_state", 0),
+            "pv3_power": current_data.get("pv3_power", 0),
+            "pv3_voltage": current_data.get("pv3_voltage", 0),
+            "pv3_current": current_data.get("pv3_current", 0),
+            "pv3_state": current_data.get("pv3_state", 0),
+            "pv4_power": current_data.get("pv4_power", 0),
+            "pv4_voltage": current_data.get("pv4_voltage", 0),
+            "pv4_current": current_data.get("pv4_current", 0),
+            "pv4_state": current_data.get("pv4_state", 0),
         }
 
         # Delay helper
@@ -120,12 +142,77 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
         async def es_mode_request():
             return True
 
-        # Execute sequentially to avoid UDP client conflicts
+        # PV.GetStatus request
+        async def pv_status_request():
+            try:
+                _LOGGER.debug("Begin PV.GetStatus query to device: %s", self.device_ip)
+                pv_status_command = get_pv_status(0)
+                _LOGGER.debug("Sensor send -> %s | %s", self.device_ip, pv_status_command)
+                # Wait up to 2.5s
+                pv_status_result = await self.udp_client.send_request(
+                    pv_status_command, self.device_ip, DEFAULT_UDP_PORT, timeout=2.5
+                )
+                _LOGGER.debug("Sensor recv <- %s | %s", self.device_ip, pv_status_result)
+
+                pv_data = pv_status_result.get("result", {})
+                _LOGGER.debug("PV.GetStatus raw: %s", pv_status_result)
+                _LOGGER.debug("PV.GetStatus data: %s", pv_data)
+
+                # PV1 data
+                result_data["pv1_power"] = pv_data.get("pv1_power", result_data.get("pv1_power", 0))
+                result_data["pv1_voltage"] = pv_data.get("pv1_voltage", result_data.get("pv1_voltage", 0))
+                result_data["pv1_current"] = pv_data.get("pv1_current", result_data.get("pv1_current", 0))
+                result_data["pv1_state"] = pv_data.get("pv1_state", result_data.get("pv1_state", 0))
+
+                # PV2 data
+                result_data["pv2_power"] = pv_data.get("pv2_power", result_data.get("pv2_power", 0))
+                result_data["pv2_voltage"] = pv_data.get("pv2_voltage", result_data.get("pv2_voltage", 0))
+                result_data["pv2_current"] = pv_data.get("pv2_current", result_data.get("pv2_current", 0))
+                result_data["pv2_state"] = pv_data.get("pv2_state", result_data.get("pv2_state", 0))
+
+                # PV3 data
+                result_data["pv3_power"] = pv_data.get("pv3_power", result_data.get("pv3_power", 0))
+                result_data["pv3_voltage"] = pv_data.get("pv3_voltage", result_data.get("pv3_voltage", 0))
+                result_data["pv3_current"] = pv_data.get("pv3_current", result_data.get("pv3_current", 0))
+                result_data["pv3_state"] = pv_data.get("pv3_state", result_data.get("pv3_state", 0))
+
+                # PV4 data
+                result_data["pv4_power"] = pv_data.get("pv4_power", result_data.get("pv4_power", 0))
+                result_data["pv4_voltage"] = pv_data.get("pv4_voltage", result_data.get("pv4_voltage", 0))
+                result_data["pv4_current"] = pv_data.get("pv4_current", result_data.get("pv4_current", 0))
+                result_data["pv4_state"] = pv_data.get("pv4_state", result_data.get("pv4_state", 0))
+
+                _LOGGER.debug(
+                    "Device %s PV data: PV1=%sW, PV2=%sW, PV3=%sW, PV4=%sW",
+                    self.device_ip,
+                    result_data["pv1_power"],
+                    result_data["pv2_power"],
+                    result_data["pv3_power"],
+                    result_data["pv4_power"],
+                )
+            except (TimeoutError, OSError, ValueError) as err:
+                _LOGGER.debug("PV.GetStatus failed (timeout/exception): %s %s", self.device_ip, str(err))
+                return False
+            else:
+                return True
+
+        # Execute requests sequentially and independently
+        # Each request runs independently and failures don't block the other request
+
+        # Send ES.GetMode request for battery and mode data
         try:
-            # Only send once to avoid throttling or packet loss
             await es_status_request()
         except (TimeoutError, OSError, ValueError) as err:
-            _LOGGER.error("Device %s polling error: %s", self.device_ip, err)
+            _LOGGER.error("Device %s ES.GetMode request failed: %s", self.device_ip, err)
+
+        # Wait 2 seconds before sending the next request
+        await delay(2000)
+
+        # Send PV.GetStatus request for PV data
+        try:
+            await pv_status_request()
+        except (TimeoutError, OSError, ValueError) as err:
+            _LOGGER.error("Device %s PV.GetStatus request failed: %s", self.device_ip, err)
 
         _LOGGER.debug(
             "Device %s poll done: SOC %s%%, Power %sW, Mode %s, Status %s",
@@ -182,7 +269,7 @@ class MarstekSensor(CoordinatorEntity, SensorEntity):
         """Return the name of the sensor."""
         device_ip = self._device_info.get('ip', 'Unknown')
         sensor_name = self._sensor_type.replace('_', ' ').title()
-        return f"Marstek {sensor_name} ({device_ip})"
+        return f"{sensor_name} ({device_ip})"
 
     @property
     def native_value(self) -> Any:
@@ -210,7 +297,7 @@ class MarstekBatterySensor(MarstekSensor):
     def name(self) -> str:
         """Return the name of the sensor."""
         device_ip = self._device_info.get('ip', 'Unknown')
-        return f"Marstek Battery Level ({device_ip})"
+        return f"Battery Level ({device_ip})"
 
     @property
     def native_value(self) -> int | None:
@@ -238,7 +325,7 @@ class MarstekPowerSensor(MarstekSensor):
     def name(self) -> str:
         """Return the name of the sensor."""
         device_ip = self._device_info.get('ip', 'Unknown')
-        return f"Marstek Grid Power ({device_ip})"
+        return f"Grid Power ({device_ip})"
 
     @property
     def native_value(self) -> int | None:
@@ -268,7 +355,7 @@ class MarstekDeviceInfoSensor(MarstekSensor):
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
-        return f"Marstek {self._info_type.replace('_', ' ').title()}"
+        return f"{self._info_type.replace('_', ' ').title()}"
 
     @property
     def native_value(self) -> str | None:
@@ -301,7 +388,7 @@ class MarstekDeviceModeSensor(MarstekSensor):
     def name(self) -> str:
         """Return the name of the sensor."""
         device_ip = self._device_info.get('ip', 'Unknown')
-        return f"Marstek Device Mode ({device_ip})"
+        return f"Device Mode ({device_ip})"
 
     @property
     def native_value(self) -> str | None:
@@ -330,7 +417,7 @@ class MarstekBatteryStatusSensor(MarstekSensor):
     def name(self) -> str:
         """Return the name of the sensor."""
         device_ip = self._device_info.get('ip', 'Unknown')
-        return f"Marstek Battery Status ({device_ip})"
+        return f"Battery Status ({device_ip})"
 
     @property
     def native_value(self) -> str | None:
@@ -338,6 +425,57 @@ class MarstekBatteryStatusSensor(MarstekSensor):
         if not self.coordinator.data:
             return None
         return self.coordinator.data.get("battery_status", "Unknown")
+
+
+class MarstekPVSensor(MarstekSensor):
+    """Representation of a Marstek PV sensor."""
+
+    def __init__(
+        self,
+        coordinator: DataUpdateCoordinator,
+        device_info: dict[str, Any],
+        pv_channel: int,
+        metric_type: str,
+    ) -> None:
+        """Initialize the PV sensor."""
+        sensor_key = f"pv{pv_channel}_{metric_type}"
+        super().__init__(coordinator, device_info, sensor_key)
+        self._pv_channel = pv_channel
+        self._metric_type = metric_type
+
+        # Set unit based on metric type
+        if metric_type == "power":
+            self._attr_native_unit_of_measurement = UnitOfPower.WATT
+            self._attr_icon = "mdi:solar-power"
+        elif metric_type == "voltage":
+            self._attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
+            self._attr_icon = "mdi:flash"
+        elif metric_type == "current":
+            self._attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+            self._attr_icon = "mdi:current-ac"
+        elif metric_type == "state":
+            self._attr_icon = "mdi:state-machine"
+            self._attr_device_class = None
+            self._attr_state_class = None
+        else:
+            self._attr_icon = "mdi:solar-panel"
+
+        if metric_type != "state":
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+
+    @property
+    def name(self) -> str:
+        """Return the name of the sensor."""
+        device_ip = self._device_info.get('ip', 'Unknown')
+        metric_name = self._metric_type.replace('_', ' ').title()
+        return f"PV{self._pv_channel} {metric_name} ({device_ip})"
+
+    @property
+    def native_value(self) -> int | float | None:
+        """Return the PV metric value."""
+        if not self.coordinator.data:
+            return None
+        return self.coordinator.data.get(self._sensor_type, 0)
 
 
 async def async_setup_entry(
@@ -379,6 +517,14 @@ async def async_setup_entry(
         MarstekDeviceInfoSensor(coordinator, device_info, "device_ip"),  # Device IP
         MarstekDeviceInfoSensor(coordinator, device_info, "device_version"),  # Version number
     ]
+
+    # Add PV sensors for all 4 PV channels
+    pv_sensors = [
+        MarstekPVSensor(coordinator, device_info, pv_channel, metric_type)
+        for pv_channel in range(1, 5)
+        for metric_type in ["power", "voltage", "current", "state"]
+    ]
+    sensors.extend(pv_sensors)
 
     _LOGGER.info("Device %s sensors set up, total %d", device_ip, len(sensors))
     async_add_entities(sensors)

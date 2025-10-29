@@ -1,5 +1,7 @@
-"""Command builder for Marstek devices."""
+"""Command builder for Marstek devices.
 
+Build the JSON string of the request command.
+"""
 from __future__ import annotations
 
 import json
@@ -11,6 +13,7 @@ from .const import (
     CMD_ES_MODE,
     CMD_ES_SET_MODE,
     CMD_ES_STATUS,
+    CMD_PV_GET_STATUS,
 )
 
 # Request ID counter
@@ -59,6 +62,9 @@ def get_es_mode(device_id: int = 0) -> str:
     """Get device operating mode and battery info command."""
     return build_command(CMD_ES_MODE, {"id": device_id})
 
+def get_pv_status(device_id: int = 0) -> str:
+    """Get device PV status command."""
+    return build_command(CMD_PV_GET_STATUS, {"id": device_id})
 
 def set_es_mode_manual_charge(device_id: int = 0, power: int = -1300) -> str:
     """Set manual charge mode command."""
