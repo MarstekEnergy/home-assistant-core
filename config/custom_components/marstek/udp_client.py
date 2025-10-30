@@ -152,7 +152,13 @@ class MarstekUDPClient:
             raise
 
     async def send_request(
-        self, message: str, target_ip: str, target_port: int, timeout: float = 5.0
+        self,
+        message: str,
+        target_ip: str,
+        target_port: int,
+        timeout: float = 5.0,
+        *,
+        quiet_on_timeout: bool = False,
     ) -> dict[str, Any]:
         """Send unicast request and wait for response."""
         if not self._socket:
@@ -182,7 +188,10 @@ class MarstekUDPClient:
             try:
                 return await asyncio.wait_for(future, timeout=timeout)
             except TimeoutError as err:
-                _LOGGER.warning("Request timeout: %s:%d", target_ip, target_port)
+                if quiet_on_timeout or self.is_polling_paused(target_ip):
+                    _LOGGER.debug("Request timeout: %s:%d (quiet)", target_ip, target_port)
+                else:
+                    _LOGGER.warning("Request timeout: %s:%d", target_ip, target_port)
                 raise TimeoutError(f"Request timeout to {target_ip}:{target_port}") from err
 
         finally:
@@ -400,7 +409,9 @@ class MarstekUDPClient:
 
         try:
             # Send the request
-            return await self.send_request(message, target_ip, target_port, timeout)
+            return await self.send_request(
+                message, target_ip, target_port, timeout, quiet_on_timeout=True
+            )
         finally:
             # Always resume polling, regardless of success or failure
             await self.resume_polling(target_ip)
