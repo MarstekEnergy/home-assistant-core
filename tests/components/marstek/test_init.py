@@ -10,9 +10,9 @@ from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
 
-from tests.common import MockConfigEntry
-
 from . import create_mock_udp_client
+
+from tests.common import MockConfigEntry
 
 
 async def test_async_setup(hass: HomeAssistant) -> None:
