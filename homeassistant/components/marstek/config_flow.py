@@ -31,11 +31,7 @@ class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
     domain = DOMAIN
-
-    @staticmethod
-    def async_get_options_flow(config_entry):
-        """Get the options flow for this handler."""
-        return MarstekOptionsFlow(config_entry)
+    discovered_devices: list[dict[str, Any]]
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -48,8 +44,12 @@ class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             # Check if device is already configured (use IP as unique identifier)
             unique_id = device["ip"] or device["mac"]
-            _LOGGER.info("Check device uniqueness: IP=%s, MAC=%s, unique_id=%s",
-                        device["ip"], device["mac"], unique_id)
+            _LOGGER.info(
+                "Check device uniqueness: IP=%s, MAC=%s, unique_id=%s",
+                device["ip"],
+                device["mac"],
+                unique_id,
+            )
             await self.async_set_unique_id(unique_id)
             self._abort_if_unique_id_configured()
 
@@ -70,7 +70,7 @@ class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Start broadcast device discovery
         try:
-            _LOGGER.info("Starting device discovery...")
+            _LOGGER.info("Starting device discovery")
             udp_client = MarstekUDPClient(self.hass)
             await udp_client.async_setup()
 
@@ -103,12 +103,14 @@ class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             return self.async_show_form(
                 step_id="user",
-                data_schema=vol.Schema({
-                    vol.Required("device"): vol.In(device_options)
-                }),
+                data_schema=vol.Schema(
+                    {vol.Required("device"): vol.In(device_options)}
+                ),
                 description_placeholders={
-                    "devices": "\n".join([f"- {name}" for name in device_options.values()])
-                }
+                    "devices": "\n".join(
+                        [f"- {name}" for name in device_options.values()]
+                    )
+                },
             )
 
         except (OSError, TimeoutError, ValueError) as err:
@@ -119,18 +121,20 @@ class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors={"base": "discovery_failed"},
             )
 
-    async def _discover_devices_with_retry(self, udp_client, max_retries=2, retry_delay=3000):
+    async def _discover_devices_with_retry(
+        self, udp_client, max_retries=2, retry_delay=3000
+    ):
         """Device discovery retry mechanism."""
         for attempt in range(1, max_retries + 1):
             try:
                 if attempt > 1:
-                    _LOGGER.info("Device discovery, attempt %d...", attempt)
+                    _LOGGER.info("Device discovery, attempt %d", attempt)
                     await asyncio.sleep(retry_delay / 1000)  # Convert to seconds
                     # Clear cache, force re-discovery
                     udp_client.clear_discovery_cache()
 
                 # First attempt uses cache, retries force refresh
-                use_cache = (attempt == 1)
+                use_cache = attempt == 1
                 devices = await udp_client.discover_devices(use_cache=use_cache)
 
                 if devices:
@@ -143,7 +147,11 @@ class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.error("Device discovery failed, attempt %d: %s", attempt, error)
 
                 if attempt == max_retries:
-                    _LOGGER.error("Device discovery failed after %d retries: %s", max_retries, error)
+                    _LOGGER.error(
+                        "Device discovery failed after %d retries: %s",
+                        max_retries,
+                        error,
+                    )
                     # Try using cached data as fallback
                     if udp_client._discovery_cache:  # noqa: SLF001 - internal access needed for fallback
                         _LOGGER.info("Using cached device data as fallback")
