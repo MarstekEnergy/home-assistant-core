@@ -163,3 +163,4 @@ pytest_buckets.txt
 config/automations.yaml
 config/custom_components/marstek/__pycache__/
 config/custom_components/marstek/*.pyc
+config/
