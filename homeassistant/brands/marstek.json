@@ -1,0 +1,6 @@
+{
+  "domain": "marstek",
+  "name": "Marstek",
+  "integrations": ["marstek"],
+  "iot_standards": ["matter"]
+}

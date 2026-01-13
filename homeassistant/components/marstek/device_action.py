@@ -11,7 +11,7 @@ import voluptuous as vol
 
 from homeassistant.components.device_automation import InvalidDeviceAutomationConfig
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import CONF_DEVICE_ID, CONF_DOMAIN, CONF_TYPE
+from homeassistant.const import CONF_DEVICE_ID, CONF_DOMAIN, CONF_HOST, CONF_TYPE
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.typing import ConfigType, TemplateVarsType
@@ -268,14 +268,23 @@ async def _get_host_from_device(hass: HomeAssistant, device_id: str) -> str | No
     if not device:
         return None
 
-    for domain, identifier in device.identifiers:
-        if domain == DOMAIN:
-            return identifier
-
+    # Priority 1: Get host (IP address) from config entry
+    # Identifiers store MAC addresses, not IP addresses, so we need the config entry
     for entry_id in device.config_entries:
         entry = hass.config_entries.async_get_entry(entry_id)
         if entry and entry.domain == DOMAIN:
-            return entry.data.get("host")
+            host = entry.data.get(CONF_HOST)  # Use CONF_HOST constant for consistency
+            if host:
+                return host
+
+    # Priority 2: Fallback to identifier if it looks like an IP address
+    # (This should rarely happen, as identifiers are typically MAC addresses)
+    for domain, identifier in device.identifiers:
+        if domain == DOMAIN:
+            # Basic check: if identifier contains dots, it might be an IP address
+            # Otherwise it's likely a MAC address and we should skip it
+            if "." in identifier:
+                return identifier
 
     return None
 
