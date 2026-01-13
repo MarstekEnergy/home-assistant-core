@@ -3825,9 +3825,17 @@
     },
     "marstek": {
       "name": "Marstek",
-      "integration_type": "device",
-      "config_flow": true,
-      "iot_class": "local_polling"
+      "integrations": {
+        "marstek": {
+          "integration_type": "device",
+          "config_flow": true,
+          "iot_class": "local_polling",
+          "name": "Marstek"
+        }
+      },
+      "iot_standards": [
+        "matter"
+      ]
     },
     "martec": {
       "name": "Martec",
